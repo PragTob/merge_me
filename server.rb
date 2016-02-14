@@ -88,21 +88,29 @@ get '/callback' do
 end
 
 post '/webhook' do
-  @payload = JSON.parse(params[:payload]) if params[:payload]
+  # Filter for status and pull request, track newest commit hash of all
+  # pull request, and then correlate it to their status events
+  # also track the labels and see if the merge when ci passes label is applied
+  # think about what happens if requests arrive out of order
+  # And in the end... well merge it ;)
   p request
-  puts '---------------'
-  p @payload
+  puts '--------------------------'
+  request.body.rewind
+  payload = JSON.parse request.body.read
+  p payload
 
   200
 end
 
+NEEDED_EVENT_UPDATES = ["status", "pull_request"]
+
 post '/create_hook' do
  response =  RestClient.post('https://api.github.com/repos/PragTob/merge_me-test/hooks',
                   {
-                    name:         "web",
-                    active:       true,
-                    events:       ["status"],
-                    config:       {
+                    name:   "web",
+                    active: true,
+                    events: NEEDED_EVENT_UPDATES,
+                    config: {
                       url:          "#{MY_URL}/webhook",
                       content_type: "json"
                     }
