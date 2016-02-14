@@ -12,6 +12,8 @@ require 'json'
 
 CLIENT_ID = ENV['GH_CLIENT_ID']
 CLIENT_SECRET = ENV['GH_SECRET_ID']
+REQUIRED_SCOPES = %w(repo read:repo_hook write:repo_hook).join(",")
+MY_URL = 'http://fa9893a0.ngrok.io'
 
 p CLIENT_ID
 p CLIENT_SECRET
@@ -26,12 +28,16 @@ def authenticate!
   erb :'index.html', :locals => { :client_id => CLIENT_ID}
 end
 
+def access_token
+  @access_token ||= session[:access_token]
+end
+
 get '/' do
+  p request
   if !authenticated?
     authenticate!
   else
-    access_token = session[:access_token]
-    scopes = []
+    scopes       = []
 
     begin
       auth_result = RestClient.get('https://api.github.com/user',
@@ -52,6 +58,9 @@ get '/' do
     end
 
     auth_result = JSON.parse(auth_result)
+    p auth_result
+    p scopes
+    p access_token
 
     if scopes.include? 'user:email'
       auth_result['private_emails'] =
@@ -78,14 +87,29 @@ get '/callback' do
   redirect '/'
 end
 
-post '/status_handler' do
-  @payload = JSON.parse(params[:payload])
+post '/webhook' do
+  @payload = JSON.parse(params[:payload]) if params[:payload]
+  p request
+  puts '---------------'
   p @payload
 
-  case request.env['HTTP_X_GITHUB_EVENT']
-  when "pull_request"
-    if @payload["action"] == "opened"
-      process_pull_request(@payload["pull_request"])
-    end
-  end
+  200
+end
+
+post '/create_hook' do
+ response =  RestClient.post('https://api.github.com/repos/PragTob/merge_me-test/hooks',
+                  {
+                    name:         "web",
+                    active:       true,
+                    events:       ["status"],
+                    config:       {
+                      url:          "#{MY_URL}/webhook",
+                      content_type: "json"
+                    }
+                  }.to_json,
+                  accept: :json,
+                  authorization: "token #{access_token}"
+                  )
+  p response
+  redirect '/'
 end
